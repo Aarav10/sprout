@@ -351,6 +351,69 @@ class TestInterpreterArrays(unittest.TestCase):
             run_output("print pop([]);")
 
 
+class TestInterpreterMaps(unittest.TestCase):
+    def test_literal_and_lookup(self):
+        src = 'let m = {"name": "sprout", "v": 1}; print m["name"]; print m["v"];'
+        self.assertEqual(run_output(src), ["sprout", "1"])
+
+    def test_update_existing_key(self):
+        self.assertEqual(
+            run_output('let m = {"a": 1}; m["a"] = 9; print m["a"];'), ["9"])
+
+    def test_insert_new_key(self):
+        self.assertEqual(
+            run_output('let m = {"a": 1}; m["b"] = 2; print len(m); print m["b"];'),
+            ["2", "2"])
+
+    def test_number_keys(self):
+        self.assertEqual(
+            run_output('let m = {1: "one", 2: "two"}; print m[1]; print m[2];'),
+            ["one", "two"])
+
+    def test_bool_key(self):
+        # Note: like Sprout's `==`, `true` and `1` are the same key (both
+        # delegate to Python equality), so we test a bool key in isolation.
+        self.assertEqual(run_output('let m = {false: "no"}; print m[false];'),
+                         ["no"])
+
+    def test_empty_map(self):
+        self.assertEqual(run_output("let m = {}; print m; print len(m);"),
+                         ["{}", "0"])
+
+    def test_stringify_quotes_string_keys_and_values(self):
+        self.assertEqual(run_output('print {"a": "b"};'), ['{"a": "b"}'])
+
+    def test_nested_structures(self):
+        self.assertEqual(
+            run_output('print {"a": [1, 2]}["a"][1];'), ["2"])
+        self.assertEqual(
+            run_output('print [{"n": "x"}, {"n": "y"}][1]["n"];'), ["y"])
+
+    def test_keys_builtin(self):
+        self.assertEqual(run_output('print keys({"a": 1, "b": 2});'),
+                         ['["a", "b"]'])
+
+    def test_has_builtin(self):
+        self.assertEqual(
+            run_output('let m = {"a": 1}; print has(m, "a"); print has(m, "z");'),
+            ["true", "false"])
+
+    def test_trailing_comma(self):
+        self.assertEqual(run_output('print len({"a": 1, "b": 2,});'), ["2"])
+
+    def test_missing_key_raises(self):
+        with self.assertRaises(RuntimeError_):
+            run_output('let m = {"a": 1}; print m["z"];')
+
+    def test_unhashable_key_in_literal_raises(self):
+        with self.assertRaises(RuntimeError_):
+            run_output("print {[1, 2]: 3};")
+
+    def test_unhashable_key_in_assignment_raises(self):
+        with self.assertRaises(RuntimeError_):
+            run_output("let m = {}; m[[1]] = 2;")
+
+
 class TestInterpreterErrors(unittest.TestCase):
     def test_division_by_zero(self):
         with self.assertRaises(RuntimeError_):

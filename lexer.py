@@ -52,6 +52,7 @@ class TokenType(Enum):
     LBRACKET = auto()
     RBRACKET = auto()
     COMMA = auto()
+    COLON = auto()
     SEMICOLON = auto()
 
     EOF = auto()
@@ -141,6 +142,7 @@ class Lexer:
             "[": TokenType.LBRACKET,
             "]": TokenType.RBRACKET,
             ",": TokenType.COMMA,
+            ":": TokenType.COLON,
             ";": TokenType.SEMICOLON,
         }
         if c in simple:

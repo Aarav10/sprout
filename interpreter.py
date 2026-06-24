@@ -115,14 +115,29 @@ class Interpreter:
         self.globals.define("len", NativeFunction("len", 1, self._builtin_len))
         self.globals.define("push", NativeFunction("push", 2, self._builtin_push))
         self.globals.define("pop", NativeFunction("pop", 1, self._builtin_pop))
+        self.globals.define("keys", NativeFunction("keys", 1, self._builtin_keys))
+        self.globals.define("has", NativeFunction("has", 2, self._builtin_has))
 
     # --- builtins ---------------------------------------------------------
 
     def _builtin_len(self, args: List[Any]) -> Any:
         value = args[0]
-        if isinstance(value, (list, str)):
+        if isinstance(value, (list, str, dict)):
             return len(value)
-        raise RuntimeError_("len() expects an array or string")
+        raise RuntimeError_("len() expects an array, string, or map")
+
+    def _builtin_keys(self, args: List[Any]) -> Any:
+        m = args[0]
+        if not isinstance(m, dict):
+            raise RuntimeError_("keys() expects a map")
+        return list(m.keys())
+
+    def _builtin_has(self, args: List[Any]) -> Any:
+        m, key = args
+        if not isinstance(m, dict):
+            raise RuntimeError_("has() expects a map as its first argument")
+        self._check_hashable(key)
+        return key in m
 
     def _builtin_push(self, args: List[Any]) -> Any:
         arr, value = args
@@ -205,6 +220,8 @@ class Interpreter:
             return self._eval_call(expr)
         if isinstance(expr, ast.ArrayLiteral):
             return [self.evaluate(element) for element in expr.elements]
+        if isinstance(expr, ast.MapLiteral):
+            return self._eval_map(expr)
         if isinstance(expr, ast.Index):
             return self._eval_index(expr)
         if isinstance(expr, ast.IndexAssign):
@@ -288,23 +305,48 @@ class Interpreter:
             )
         return callee.call(self, args)
 
+    def _eval_map(self, expr: ast.MapLiteral) -> Any:
+        result = {}
+        for key_expr, value_expr in expr.pairs:
+            key = self.evaluate(key_expr)
+            self._check_hashable(key)
+            result[key] = self.evaluate(value_expr)
+        return result
+
     def _eval_index(self, expr: ast.Index) -> Any:
         target = self.evaluate(expr.target)
         index = self.evaluate(expr.index)
-        if not isinstance(target, (list, str)):
-            raise RuntimeError_("can only index into arrays and strings")
-        i = self._resolve_index(target, index)
-        return target[i]
+        if isinstance(target, dict):
+            self._check_hashable(index)  # avoid a raw TypeError from `in`
+            if index not in target:
+                raise RuntimeError_(
+                    f"key {self._stringify_element(index)} not found in map"
+                )
+            return target[index]
+        if isinstance(target, (list, str)):
+            i = self._resolve_index(target, index)
+            return target[i]
+        raise RuntimeError_("can only index into arrays, strings, and maps")
 
     def _eval_index_assign(self, expr: ast.IndexAssign) -> Any:
         target = self.evaluate(expr.target)
         index = self.evaluate(expr.index)
         value = self.evaluate(expr.value)
-        if not isinstance(target, list):
-            raise RuntimeError_("can only assign to array elements")
-        i = self._resolve_index(target, index)
-        target[i] = value
-        return value
+        if isinstance(target, dict):
+            self._check_hashable(index)
+            target[index] = value  # inserts or updates; maps grow
+            return value
+        if isinstance(target, list):
+            i = self._resolve_index(target, index)
+            target[i] = value
+            return value
+        raise RuntimeError_("can only assign to array elements or map keys")
+
+    def _check_hashable(self, key: Any) -> None:
+        """Maps accept string/number/boolean/nil keys; arrays and maps can't
+        be keys (they're mutable / unhashable)."""
+        if isinstance(key, (list, dict)):
+            raise RuntimeError_("map key must be a string, number, boolean, or nil")
 
     def _resolve_index(self, seq: Any, index: Any) -> int:
         """Validate an index and normalize negatives (Python-style), or raise."""
@@ -342,6 +384,12 @@ class Interpreter:
             return "false"
         if isinstance(value, list):
             return "[" + ", ".join(self._stringify_element(e) for e in value) + "]"
+        if isinstance(value, dict):
+            items = ", ".join(
+                f"{self._stringify_element(k)}: {self._stringify_element(v)}"
+                for k, v in value.items()
+            )
+            return "{" + items + "}"
         return str(value)
 
     def _stringify_element(self, value: Any) -> str:

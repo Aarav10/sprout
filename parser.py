@@ -25,8 +25,13 @@ Grammar (informal, lowest to highest precedence):
     unary       -> ("!" | "-") unary | call
     call        -> primary ( "(" arguments? ")" | "[" expression "]" )*
     primary     -> NUMBER | STRING | "true" | "false" | "nil"
-                 | IDENT | array | "(" expression ")"
+                 | IDENT | array | map | "(" expression ")"
     array       -> "[" ( expression ( "," expression )* ","? )? "]"
+    map         -> "{" ( pair ( "," pair )* ","? )? "}"
+    pair        -> expression ":" expression
+
+Note: a "{" in statement position is a block, not a map literal; map
+literals are only recognized in expression position (see primary).
 """
 
 from typing import List, Optional
@@ -311,6 +316,24 @@ class Parser:
         self._consume(TokenType.RBRACKET, "expected ']' after array elements")
         return ast.ArrayLiteral(elements)
 
+    def _map_literal(self) -> ast.Expr:
+        # Opening '{' already consumed. Note: this is only reached in
+        # expression position; a '{' starting a statement is a block.
+        pairs = []
+        if not self._check(TokenType.RBRACE):
+            while True:
+                key = self._expression()
+                self._consume(TokenType.COLON, "expected ':' after map key")
+                value = self._expression()
+                pairs.append((key, value))
+                if not self._match(TokenType.COMMA):
+                    break
+                # Allow a trailing comma: {"a": 1, }.
+                if self._check(TokenType.RBRACE):
+                    break
+        self._consume(TokenType.RBRACE, "expected '}' after map entries")
+        return ast.MapLiteral(pairs)
+
     def _primary(self) -> ast.Expr:
         if self._match(TokenType.TRUE):
             return ast.Literal(True)
@@ -324,6 +347,8 @@ class Parser:
             return ast.Identifier(self._previous().lexeme)
         if self._match(TokenType.LBRACKET):
             return self._array_literal()
+        if self._match(TokenType.LBRACE):
+            return self._map_literal()
         if self._match(TokenType.LPAREN):
             expr = self._expression()
             self._consume(TokenType.RPAREN, "expected ')' after expression")

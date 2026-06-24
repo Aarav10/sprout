@@ -83,8 +83,15 @@ class ArrayLiteral(Expr):
 
 
 @dataclass
+class MapLiteral(Expr):
+    """A hash-map literal, e.g. `{"a": 1, "b": 2}`. `pairs` is a list of
+    (key_expr, value_expr) tuples, evaluated in order."""
+    pairs: List[tuple]
+
+
+@dataclass
 class Index(Expr):
-    """An element read, e.g. `arr[i]`."""
+    """An element read: `arr[i]` for arrays/strings or `map[key]` for maps."""
     target: Expr
     index: Expr
 

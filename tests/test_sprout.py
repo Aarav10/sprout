@@ -98,9 +98,11 @@ class TestLexer(unittest.TestCase):
         self.assertEqual(lex(r'"say \"hi\""')[0].literal, 'say "hi"')
 
     def test_escaped_quote_does_not_terminate(self):
-        # `"\""` opens, escapes a quote, then has no real closing quote.
+        # Source is the 3 chars  " \ "  -> open quote, an escaped quote, then
+        # EOF. The \" is consumed as a literal quote, so there is no closing
+        # quote and the string is unterminated.
         with self.assertRaises(LexError):
-            lex(r'"\""')
+            lex(r'"\"')
 
     def test_unknown_escape_raises(self):
         with self.assertRaises(LexError):

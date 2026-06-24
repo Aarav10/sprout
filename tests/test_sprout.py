@@ -241,6 +241,61 @@ class TestInterpreterFunctions(unittest.TestCase):
         self.assertEqual(run_output(src), ["inner", "outer"])
 
 
+class TestInterpreterArrays(unittest.TestCase):
+    def test_literal_and_print(self):
+        self.assertEqual(run_output("print [1, 2, 3];"), ["[1, 2, 3]"])
+
+    def test_indexing(self):
+        self.assertEqual(run_output("let a = [10, 20, 30]; print a[1];"), ["20"])
+
+    def test_negative_index(self):
+        self.assertEqual(run_output("print [1, 2, 3][-1];"), ["3"])
+
+    def test_index_assignment(self):
+        self.assertEqual(run_output("let a = [1, 2, 3]; a[1] = 99; print a;"),
+                         ["[1, 99, 3]"])
+
+    def test_nested_arrays(self):
+        self.assertEqual(run_output("print [[1, 2], [3, 4]][1][0];"), ["3"])
+
+    def test_strings_quoted_inside_array(self):
+        self.assertEqual(run_output('print ["x", "y"];'), ['["x", "y"]'])
+
+    def test_empty_array_and_trailing_comma(self):
+        self.assertEqual(run_output("print [];"), ["[]"])
+        self.assertEqual(run_output("print [1, 2,];"), ["[1, 2]"])
+
+    def test_len_builtin(self):
+        self.assertEqual(run_output('print len([1, 2, 3]); print len("abcd");'),
+                         ["3", "4"])
+
+    def test_push_and_pop(self):
+        src = "let a = [1]; push(a, 2); print a; print pop(a); print a;"
+        self.assertEqual(run_output(src), ["[1, 2]", "2", "[1]"])
+
+    def test_string_indexing(self):
+        self.assertEqual(run_output('print "hello"[1];'), ["e"])
+
+    def test_array_equality_by_value(self):
+        self.assertEqual(run_output("print [1, 2] == [1, 2];"), ["true"])
+
+    def test_index_out_of_range(self):
+        with self.assertRaises(RuntimeError_):
+            run_output("print [1, 2][5];")
+
+    def test_non_integer_index(self):
+        with self.assertRaises(RuntimeError_):
+            run_output("print [1, 2][true];")
+
+    def test_index_into_non_indexable(self):
+        with self.assertRaises(RuntimeError_):
+            run_output("print 5[0];")
+
+    def test_pop_empty(self):
+        with self.assertRaises(RuntimeError_):
+            run_output("print pop([]);")
+
+
 class TestInterpreterErrors(unittest.TestCase):
     def test_division_by_zero(self):
         with self.assertRaises(RuntimeError_):

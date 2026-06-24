@@ -76,6 +76,28 @@ class Call(Expr):
     args: List[Expr]
 
 
+@dataclass
+class ArrayLiteral(Expr):
+    """An array literal, e.g. `[1, 2, 3]`."""
+    elements: List[Expr]
+
+
+@dataclass
+class Index(Expr):
+    """An element read, e.g. `arr[i]`."""
+    target: Expr
+    index: Expr
+
+
+@dataclass
+class IndexAssign(Expr):
+    """An element write, e.g. `arr[i] = x`. Kept separate from Assign because
+    the target is an arbitrary expression plus an index, not a bare name."""
+    target: Expr
+    index: Expr
+    value: Expr
+
+
 # --- Statements -----------------------------------------------------------
 
 @dataclass

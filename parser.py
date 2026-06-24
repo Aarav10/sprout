@@ -13,7 +13,7 @@ Grammar (informal, lowest to highest precedence):
     exprStmt    -> expression ";"
 
     expression  -> assignment
-    assignment  -> IDENT "=" assignment | logic_or
+    assignment  -> ( IDENT | index ) "=" assignment | logic_or
     logic_or    -> logic_and ( "or" logic_and )*
     logic_and   -> equality ( "and" equality )*
     equality    -> comparison ( ("==" | "!=") comparison )*
@@ -21,9 +21,10 @@ Grammar (informal, lowest to highest precedence):
     term        -> factor ( ("+" | "-") factor )*
     factor      -> unary ( ("*" | "/" | "%") unary )*
     unary       -> ("!" | "-") unary | call
-    call        -> primary ( "(" arguments? ")" )*
+    call        -> primary ( "(" arguments? ")" | "[" expression "]" )*
     primary     -> NUMBER | STRING | "true" | "false" | "nil"
-                 | IDENT | "(" expression ")"
+                 | IDENT | array | "(" expression ")"
+    array       -> "[" ( expression ( "," expression )* ","? )? "]"
 """
 
 from typing import List, Optional
@@ -153,6 +154,8 @@ class Parser:
             value = self._assignment()  # right-associative
             if isinstance(expr, ast.Identifier):
                 return ast.Assign(expr.name, value)
+            if isinstance(expr, ast.Index):
+                return ast.IndexAssign(expr.target, expr.index, value)
             raise ParseError(f"invalid assignment target on line {equals.line}")
         return expr
 
@@ -213,9 +216,17 @@ class Parser:
 
     def _call(self) -> ast.Expr:
         expr = self._primary()
-        # Loop so chained calls like f(a)(b) parse correctly.
-        while self._match(TokenType.LPAREN):
-            expr = self._finish_call(expr)
+        # Postfix loop: handle chained calls f(a)(b) and indexing a[i][j],
+        # in any combination, left to right.
+        while True:
+            if self._match(TokenType.LPAREN):
+                expr = self._finish_call(expr)
+            elif self._match(TokenType.LBRACKET):
+                index = self._expression()
+                self._consume(TokenType.RBRACKET, "expected ']' after index")
+                expr = ast.Index(expr, index)
+            else:
+                break
         return expr
 
     def _finish_call(self, callee: ast.Expr) -> ast.Expr:
@@ -229,6 +240,20 @@ class Parser:
         self._consume(TokenType.RPAREN, "expected ')' after arguments")
         return ast.Call(callee, args)
 
+    def _array_literal(self) -> ast.Expr:
+        # Opening '[' already consumed.
+        elements: List[ast.Expr] = []
+        if not self._check(TokenType.RBRACKET):
+            while True:
+                elements.append(self._expression())
+                if not self._match(TokenType.COMMA):
+                    break
+                # Allow a trailing comma: [1, 2, ].
+                if self._check(TokenType.RBRACKET):
+                    break
+        self._consume(TokenType.RBRACKET, "expected ']' after array elements")
+        return ast.ArrayLiteral(elements)
+
     def _primary(self) -> ast.Expr:
         if self._match(TokenType.TRUE):
             return ast.Literal(True)
@@ -240,6 +265,8 @@ class Parser:
             return ast.Literal(self._previous().literal)
         if self._match(TokenType.IDENT):
             return ast.Identifier(self._previous().lexeme)
+        if self._match(TokenType.LBRACKET):
+            return self._array_literal()
         if self._match(TokenType.LPAREN):
             expr = self._expression()
             self._consume(TokenType.RPAREN, "expected ')' after expression")

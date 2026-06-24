@@ -62,6 +62,13 @@ class Function:
         self.declaration = declaration
         self.closure = closure
 
+    @property
+    def name(self) -> str:
+        return self.declaration.name
+
+    def arity(self) -> int:
+        return len(self.declaration.params)
+
     def call(self, interpreter: "Interpreter", args: List[Any]) -> Any:
         # Each call gets a fresh scope whose parent is the closure, so the
         # function sees the variables in scope where it was *defined*.
@@ -78,10 +85,59 @@ class Function:
         return f"<fn {self.declaration.name}>"
 
 
+class NativeFunction:
+    """A builtin implemented in Python (e.g. `len`). Same call interface as
+    Function so `_eval_call` can treat them uniformly."""
+
+    def __init__(self, name: str, arity: int, fn):
+        self.name = name
+        self._arity = arity
+        self.fn = fn
+
+    def arity(self) -> int:
+        return self._arity
+
+    def call(self, interpreter: "Interpreter", args: List[Any]) -> Any:
+        return self.fn(args)
+
+    def __repr__(self) -> str:
+        return f"<native fn {self.name}>"
+
+
 class Interpreter:
     def __init__(self):
         self.globals = Environment()
         self.environment = self.globals
+        self._install_builtins()
+
+    def _install_builtins(self) -> None:
+        """Register native functions into the global scope."""
+        self.globals.define("len", NativeFunction("len", 1, self._builtin_len))
+        self.globals.define("push", NativeFunction("push", 2, self._builtin_push))
+        self.globals.define("pop", NativeFunction("pop", 1, self._builtin_pop))
+
+    # --- builtins ---------------------------------------------------------
+
+    def _builtin_len(self, args: List[Any]) -> Any:
+        value = args[0]
+        if isinstance(value, (list, str)):
+            return len(value)
+        raise RuntimeError_("len() expects an array or string")
+
+    def _builtin_push(self, args: List[Any]) -> Any:
+        arr, value = args
+        if not isinstance(arr, list):
+            raise RuntimeError_("push() expects an array as its first argument")
+        arr.append(value)
+        return arr  # mutated in place, returned for convenience
+
+    def _builtin_pop(self, args: List[Any]) -> Any:
+        arr = args[0]
+        if not isinstance(arr, list):
+            raise RuntimeError_("pop() expects an array")
+        if not arr:
+            raise RuntimeError_("pop() from an empty array")
+        return arr.pop()
 
     def interpret(self, statements: List[ast.Stmt]) -> None:
         """Run a whole program (list of top-level statements)."""
@@ -147,6 +203,12 @@ class Interpreter:
             return self._eval_logical(expr)
         if isinstance(expr, ast.Call):
             return self._eval_call(expr)
+        if isinstance(expr, ast.ArrayLiteral):
+            return [self.evaluate(element) for element in expr.elements]
+        if isinstance(expr, ast.Index):
+            return self._eval_index(expr)
+        if isinstance(expr, ast.IndexAssign):
+            return self._eval_index_assign(expr)
         raise RuntimeError_(f"unknown expression type {type(expr).__name__}")
 
     def _eval_unary(self, expr: ast.Unary) -> Any:
@@ -216,15 +278,43 @@ class Interpreter:
     def _eval_call(self, expr: ast.Call) -> Any:
         callee = self.evaluate(expr.callee)
         args = [self.evaluate(arg) for arg in expr.args]
-        if not isinstance(callee, Function):
+        if not isinstance(callee, (Function, NativeFunction)):
             raise RuntimeError_("can only call functions")
-        expected = len(callee.declaration.params)
+        expected = callee.arity()
         if len(args) != expected:
             raise RuntimeError_(
-                f"function '{callee.declaration.name}' expected {expected} "
+                f"function '{callee.name}' expected {expected} "
                 f"argument(s) but got {len(args)}"
             )
         return callee.call(self, args)
+
+    def _eval_index(self, expr: ast.Index) -> Any:
+        target = self.evaluate(expr.target)
+        index = self.evaluate(expr.index)
+        if not isinstance(target, (list, str)):
+            raise RuntimeError_("can only index into arrays and strings")
+        i = self._resolve_index(target, index)
+        return target[i]
+
+    def _eval_index_assign(self, expr: ast.IndexAssign) -> Any:
+        target = self.evaluate(expr.target)
+        index = self.evaluate(expr.index)
+        value = self.evaluate(expr.value)
+        if not isinstance(target, list):
+            raise RuntimeError_("can only assign to array elements")
+        i = self._resolve_index(target, index)
+        target[i] = value
+        return value
+
+    def _resolve_index(self, seq: Any, index: Any) -> int:
+        """Validate an index and normalize negatives (Python-style), or raise."""
+        if not isinstance(index, int) or isinstance(index, bool):
+            raise RuntimeError_("index must be an integer")
+        n = len(seq)
+        i = index + n if index < 0 else index
+        if i < 0 or i >= n:
+            raise RuntimeError_(f"index {index} out of range for length {n}")
+        return i
 
     # --- helpers ----------------------------------------------------------
 
@@ -250,4 +340,12 @@ class Interpreter:
             return "true"
         if value is False:
             return "false"
+        if isinstance(value, list):
+            return "[" + ", ".join(self._stringify_element(e) for e in value) + "]"
         return str(value)
+
+    def _stringify_element(self, value: Any) -> str:
+        """Like _stringify but quotes strings, so `[1, "a"]` is unambiguous."""
+        if isinstance(value, str):
+            return '"' + value + '"'
+        return self._stringify(value)

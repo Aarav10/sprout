@@ -1,0 +1,30 @@
+// Array statistics -- arrays and for loops working together.
+//
+// Walk a list of numbers once, tracking the running sum, min, and max,
+// then build a second array holding the values in reverse.
+
+let nums = [42, 17, 99, 8, 23, 56, 4, 71];
+
+let total = 0;
+let biggest = nums[0];
+let smallest = nums[0];
+
+for (let i = 0; i < len(nums); i = i + 1) {
+    let n = nums[i];
+    total = total + n;
+    if (n > biggest) { biggest = n; }
+    if (n < smallest) { smallest = n; }
+}
+
+print "Numbers: {join(nums, ", ")}";
+print "Count:   {len(nums)}";
+print "Sum:     {total}";
+print "Min:     {smallest}";
+print "Max:     {biggest}";
+
+// Reverse the array by walking it back to front.
+let reversed = [];
+for (let i = len(nums) - 1; i >= 0; i = i - 1) {
+    push(reversed, nums[i]);
+}
+print "Reversed: {join(reversed, ", ")}";

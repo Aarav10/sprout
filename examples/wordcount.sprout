@@ -1,0 +1,25 @@
+// Word-frequency counter -- a tour of hash maps.
+//
+// Split a sentence into words, then tally how many times each appears
+// using a dictionary keyed by the word.
+
+let text = "the cat sat on the mat the cat ran";
+let words = split(text);
+
+let counts = {};
+for (let i = 0; i < len(words); i = i + 1) {
+    let w = words[i];
+    if (has(counts, w)) {
+        counts[w] = counts[w] + 1;   // seen before: bump the tally
+    } else {
+        counts[w] = 1;               // first sighting
+    }
+}
+
+print "Word counts:";
+let unique = keys(counts);
+for (let i = 0; i < len(unique); i = i + 1) {
+    let w = unique[i];
+    print "  {w}: {counts[w]}";
+}
+print "Distinct words: {len(counts)} out of {len(words)} total";

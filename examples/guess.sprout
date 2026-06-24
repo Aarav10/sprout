@@ -1,0 +1,36 @@
+// A number guessing game, driven by input().
+//
+// Sprout has no random() builtin, so the secret is fixed -- that way the
+// game plays out the same every time you pipe the same guesses in. Try:
+//
+//   echo "50
+//   75
+//   62
+//   68
+//   65" | python3 main.py examples/guess.sprout
+
+let secret = 65;
+let guesses = 0;
+let done = false;
+
+print "Guess the number between 1 and 100!";
+
+while (!done) {
+    let line = input("Your guess: ");
+    if (line == nil) {
+        // End of input (e.g. Ctrl-D or no more piped lines).
+        print "Out of guesses. Bye!";
+        done = true;
+    } else {
+        let guess = num(line);
+        guesses = guesses + 1;
+        if (guess < secret) {
+            print "Too low.";
+        } else if (guess > secret) {
+            print "Too high.";
+        } else {
+            print "Correct! You got it in {guesses} guesses.";
+            done = true;
+        }
+    }
+}

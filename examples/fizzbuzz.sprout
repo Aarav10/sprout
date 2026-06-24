@@ -1,0 +1,15 @@
+// FizzBuzz -- the classic.
+// Print 1..20, but say "Fizz" for multiples of 3, "Buzz" for multiples of
+// 5, and "FizzBuzz" for numbers divisible by both.
+
+for (let n = 1; n <= 20; n = n + 1) {
+    if (n % 15 == 0) {
+        print "FizzBuzz";
+    } else if (n % 3 == 0) {
+        print "Fizz";
+    } else if (n % 5 == 0) {
+        print "Buzz";
+    } else {
+        print "{n}";
+    }
+}

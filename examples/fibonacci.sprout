@@ -1,0 +1,22 @@
+// Fibonacci, computed two different ways.
+
+// 1) Recursively -- the textbook definition, straight from the math.
+fn fib(n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+
+print "Recursive:";
+for (let i = 0; i < 15; i = i + 1) {
+    print "  fib({i}) = {fib(i)}";
+}
+
+// 2) Iteratively -- build up an array, each value being the sum of the
+//    previous two. Much faster, since it avoids recomputing subproblems.
+print "Iterative:";
+let seq = [0, 1];
+while (len(seq) < 15) {
+    let n = len(seq);
+    push(seq, seq[n - 1] + seq[n - 2]);
+}
+print "  {join(seq, ", ")}";

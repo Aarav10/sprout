@@ -1,48 +1,48 @@
 # Sprout
 
-A small programming language with a tree-walking interpreter, written from scratch in Python.
+A small programming language I made in Python. It has a tree walking interpreter and I wrote the whole thing from scratch.
 
 ## Why
 
-I wanted to actually understand how interpreters work — not just read about lexers and parsers, but build one end to end. So Sprout has no parsing libraries, no dependencies, nothing magic: just a hand-written lexer, a recursive-descent parser, and an interpreter that walks the syntax tree. If you've ever wondered what happens between typing `1 + 2 * 3` and getting `7`, the code here is meant to be read.
+I wanted to actually get how interpreters work instead of just reading about lexers and parsers. So I built one start to finish. No parsing libraries, no dependencies, nothing fancy. Just a lexer I wrote by hand, a recursive descent parser, and an interpreter that walks the tree. If you've ever wondered what actually happens between typing `1 + 2 * 3` and getting `7`, that's basically what this code is.
 
 ## Running it
 
 Run a file:
 
-```sh
+​```sh
 python3 main.py examples/fizzbuzz.sprout
-```
+​```
 
-Or start the REPL (no arguments) and poke at things line by line:
+Or just start the REPL with no arguments and mess around line by line:
 
-```sh
+​```sh
 python3 main.py
 >>> let x = 21;
 >>> x * 2
 42
-```
+​```
 
-No install step, no packages — you just need Python 3. (The `.sprout` extension is only a convention; any text file works.)
+No install, no packages, you just need Python 3. The `.sprout` extension is just a convention, any text file works.
 
 ## The language in 60 seconds
 
-```
-// variables and the basic types
+​```
+// variables and basic types
 let name = "Sprout";
 let count = 3;
 let pi = 3.14;
-let ok = true;        // also: false, nil
+let ok = true;        // also false, nil
 
-// arithmetic, comparison, logic
+// math, comparison, logic
 let x = 1 + 2 * 3;    // + - * / %
 let big = x > 5 and x < 100;
 let either = false or true;
 
-// strings: concatenation and interpolation
+// strings: concat and interpolation
 print "hi " + name;
 print "name={name} count={count} sum={1 + 2}";
-print "newlines\tand tabs\nwork too";   // \n \t \r \\ \" \{ \}
+print "newlines\tand tabs\nwork too";
 
 // if / else if / else
 if (count > 5) { print "lots"; }
@@ -74,43 +74,13 @@ print user["name"];
 user["age"] = 37;
 print keys(user);     // ["name", "age"]
 print has(user, "name");
-```
+​```
 
 ### Built-in functions
 
 | Function | What it does |
 |---|---|
 | `len(x)` | length of an array, string, or map |
-| `push(arr, v)` / `pop(arr)` | append / remove-last on an array |
+| `push(arr, v)` / `pop(arr)` | add to / remove last from an array |
 | `keys(map)` / `has(map, k)` | a map's keys / whether a key exists |
-| `range(stop)` / `range(start, stop[, step])` | array of numbers |
-| `input(prompt?)` | read a line (returns `nil` at end of input) |
-| `str(x)` / `num(s)` | convert to string / parse a number |
-| `split(s, sep?)` / `join(arr, sep)` | string ↔ array |
-
-### When something goes wrong
-
-Errors point at the line and the spot:
-
-```
-Runtime error: index 10 out of range for length 3 (line 2)
-
-  2 | print a[10];
-    | ^
-```
-
-## Examples
-
-There are a handful of complete programs in [`examples/`](examples/):
-
-- `fizzbuzz.sprout` — loops and conditionals
-- `fibonacci.sprout` — recursion and an iterative version
-- `guess.sprout` — a number-guessing game using `input()`
-- `wordcount.sprout` — counting words with a hash map
-- `stats.sprout` — min/max/sum over an array
-
-## Tests
-
-```sh
-python3 -m unittest discover -s tests
-```
+|

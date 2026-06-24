@@ -89,6 +89,23 @@ class TestLexer(unittest.TestCase):
     def test_string_literal_strips_quotes(self):
         self.assertEqual(lex('"hello"')[0].literal, "hello")
 
+    def test_string_escape_sequences(self):
+        # Source contains a backslash + letter; literal holds the real char.
+        self.assertEqual(lex(r'"a\nb"')[0].literal, "a\nb")
+        self.assertEqual(lex(r'"a\tb"')[0].literal, "a\tb")
+        self.assertEqual(lex(r'"a\rb"')[0].literal, "a\rb")
+        self.assertEqual(lex(r'"a\\b"')[0].literal, "a\\b")
+        self.assertEqual(lex(r'"say \"hi\""')[0].literal, 'say "hi"')
+
+    def test_escaped_quote_does_not_terminate(self):
+        # `"\""` opens, escapes a quote, then has no real closing quote.
+        with self.assertRaises(LexError):
+            lex(r'"\""')
+
+    def test_unknown_escape_raises(self):
+        with self.assertRaises(LexError):
+            lex(r'"bad\q"')
+
     def test_keywords_vs_identifiers(self):
         self.assertEqual(lex("let")[0].type, TokenType.LET)
         self.assertEqual(lex("lettuce")[0].type, TokenType.IDENT)

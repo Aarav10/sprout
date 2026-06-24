@@ -75,6 +75,17 @@ KEYWORDS = {
     "or": TokenType.OR,
 }
 
+# Backslash escape sequences recognized inside string literals. Anything else
+# after a backslash is a lex error.
+STRING_ESCAPES = {
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "0": "\0",
+    "\\": "\\",
+    '"': '"',
+}
+
 
 @dataclass
 class Token:
@@ -191,19 +202,35 @@ class Lexer:
         self._add_token(TokenType.NUMBER, value)
 
     def _string(self) -> None:
-        """Scan a double-quoted string literal (no escape sequences yet)."""
+        """Scan a double-quoted string literal, translating escape sequences.
+
+        The token's literal value is the *decoded* string, so a `\\n` in the
+        source becomes an actual newline character in the value.
+        """
+        chars: List[str] = []
         while self._peek() != '"' and not self._is_at_end():
-            if self._peek() == "\n":
-                self.line += 1
-            self._advance()
+            c = self._advance()
+            if c == "\\":
+                # A backslash at end-of-input falls through to the
+                # unterminated-string check below.
+                if self._is_at_end():
+                    break
+                esc = self._advance()
+                if esc not in STRING_ESCAPES:
+                    raise LexError(
+                        f"Unknown escape sequence '\\{esc}' on line {self.line}"
+                    )
+                chars.append(STRING_ESCAPES[esc])
+            else:
+                if c == "\n":
+                    self.line += 1
+                chars.append(c)
 
         if self._is_at_end():
             raise LexError(f"Unterminated string starting on line {self.line}")
 
         self._advance()  # consume the closing quote
-        # Strip the surrounding quotes for the literal value.
-        value = self.source[self.start + 1:self.current - 1]
-        self._add_token(TokenType.STRING, value)
+        self._add_token(TokenType.STRING, "".join(chars))
 
     def _identifier(self) -> None:
         """Scan an identifier, promoting it to a keyword token if it is one."""

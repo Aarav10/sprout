@@ -117,8 +117,87 @@ class Interpreter:
         self.globals.define("pop", NativeFunction("pop", 1, self._builtin_pop))
         self.globals.define("keys", NativeFunction("keys", 1, self._builtin_keys))
         self.globals.define("has", NativeFunction("has", 2, self._builtin_has))
+        # Standard library. arity None == variadic (the builtin checks itself).
+        self.globals.define("range", NativeFunction("range", None, self._builtin_range))
+        self.globals.define("input", NativeFunction("input", None, self._builtin_input))
+        self.globals.define("str", NativeFunction("str", 1, self._builtin_str))
+        self.globals.define("num", NativeFunction("num", 1, self._builtin_num))
+        self.globals.define("split", NativeFunction("split", None, self._builtin_split))
+        self.globals.define("join", NativeFunction("join", 2, self._builtin_join))
 
     # --- builtins ---------------------------------------------------------
+
+    def _builtin_range(self, args: List[Any]) -> Any:
+        """range(stop) | range(start, stop) | range(start, stop, step) -> array."""
+        if not 1 <= len(args) <= 3:
+            raise RuntimeError_("range() expects 1 to 3 arguments")
+        if not all(self._is_int(a) for a in args):
+            raise RuntimeError_("range() arguments must be integers")
+        if len(args) == 1:
+            start, stop, step = 0, args[0], 1
+        elif len(args) == 2:
+            start, stop, step = args[0], args[1], 1
+        else:
+            start, stop, step = args
+        if step == 0:
+            raise RuntimeError_("range() step must not be zero")
+        return list(range(start, stop, step))
+
+    def _builtin_input(self, args: List[Any]) -> Any:
+        """input() | input(prompt) -> the line read (without newline), or nil
+        at end of input."""
+        if len(args) > 1:
+            raise RuntimeError_("input() expects 0 or 1 arguments")
+        prompt = self._stringify(args[0]) if args else ""
+        try:
+            return input(prompt)
+        except EOFError:
+            return None
+
+    def _builtin_str(self, args: List[Any]) -> Any:
+        return self._stringify(args[0])
+
+    def _builtin_num(self, args: List[Any]) -> Any:
+        """num(string) -> int or float; num(number) -> itself."""
+        value = args[0]
+        if self._is_number(value):
+            return value
+        if isinstance(value, str):
+            text = value.strip()
+            try:
+                if any(c in text for c in ".eE"):
+                    return float(text)
+                return int(text)
+            except ValueError:
+                raise RuntimeError_(
+                    f"cannot convert {self._stringify_element(value)} to a number"
+                )
+        raise RuntimeError_("num() expects a string or number")
+
+    def _builtin_split(self, args: List[Any]) -> Any:
+        """split(s) splits on whitespace; split(s, sep) splits on sep."""
+        if not 1 <= len(args) <= 2:
+            raise RuntimeError_("split() expects 1 or 2 arguments")
+        s = args[0]
+        if not isinstance(s, str):
+            raise RuntimeError_("split() expects a string")
+        if len(args) == 1:
+            return s.split()
+        sep = args[1]
+        if not isinstance(sep, str):
+            raise RuntimeError_("split() separator must be a string")
+        if sep == "":
+            raise RuntimeError_("split() separator must not be empty")
+        return s.split(sep)
+
+    def _builtin_join(self, args: List[Any]) -> Any:
+        """join(array, sep) -> string. Non-string elements are stringified."""
+        arr, sep = args
+        if not isinstance(arr, list):
+            raise RuntimeError_("join() expects an array as its first argument")
+        if not isinstance(sep, str):
+            raise RuntimeError_("join() separator must be a string")
+        return sep.join(self._stringify(e) for e in arr)
 
     def _builtin_len(self, args: List[Any]) -> Any:
         value = args[0]
@@ -298,7 +377,8 @@ class Interpreter:
         if not isinstance(callee, (Function, NativeFunction)):
             raise RuntimeError_("can only call functions")
         expected = callee.arity()
-        if len(args) != expected:
+        # arity() of None means the callee is variadic and checks args itself.
+        if expected is not None and len(args) != expected:
             raise RuntimeError_(
                 f"function '{callee.name}' expected {expected} "
                 f"argument(s) but got {len(args)}"
@@ -363,6 +443,9 @@ class Interpreter:
     def _is_number(self, value: Any) -> bool:
         # bool is a subclass of int in Python; exclude it so `true * 2` errors.
         return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    def _is_int(self, value: Any) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool)
 
     def _check_number(self, value: Any, op: str) -> None:
         if not self._is_number(value):

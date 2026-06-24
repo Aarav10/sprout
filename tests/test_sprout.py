@@ -50,6 +50,19 @@ def run_output(source):
     return text.splitlines()
 
 
+def run_io(source, stdin_text=""):
+    """Like run_output, but feeds `stdin_text` to input(). Returns printed lines."""
+    buf = io.StringIO()
+    old_stdin = sys.stdin
+    sys.stdin = io.StringIO(stdin_text)
+    try:
+        with redirect_stdout(buf):
+            Interpreter().interpret(Parser(lex(source)).parse())
+    finally:
+        sys.stdin = old_stdin
+    return buf.getvalue().splitlines()
+
+
 # --- lexer ----------------------------------------------------------------
 
 class TestLexer(unittest.TestCase):
@@ -412,6 +425,78 @@ class TestInterpreterMaps(unittest.TestCase):
     def test_unhashable_key_in_assignment_raises(self):
         with self.assertRaises(RuntimeError_):
             run_output("let m = {}; m[[1]] = 2;")
+
+
+class TestStandardLibrary(unittest.TestCase):
+    def test_range_one_arg(self):
+        self.assertEqual(run_output("print range(5);"), ["[0, 1, 2, 3, 4]"])
+
+    def test_range_two_args(self):
+        self.assertEqual(run_output("print range(2, 6);"), ["[2, 3, 4, 5]"])
+
+    def test_range_with_step(self):
+        self.assertEqual(run_output("print range(0, 10, 2);"), ["[0, 2, 4, 6, 8]"])
+
+    def test_range_negative_step(self):
+        self.assertEqual(run_output("print range(3, 0, -1);"), ["[3, 2, 1]"])
+
+    def test_range_zero_step_raises(self):
+        with self.assertRaises(RuntimeError_):
+            run_output("print range(0, 5, 0);")
+
+    def test_str_of_various(self):
+        self.assertEqual(
+            run_output('print str(42); print str(nil); print str([1, 2]);'),
+            ["42", "nil", "[1, 2]"])
+
+    def test_str_concatenation_use(self):
+        # str() is what lets you build strings from numbers.
+        self.assertEqual(run_output('print "n=" + str(5);'), ["n=5"])
+
+    def test_num_int_and_float(self):
+        self.assertEqual(run_output('print num("42"); print num("3.5");'),
+                         ["42", "3.5"])
+
+    def test_num_trims_whitespace_and_sign(self):
+        self.assertEqual(run_output('print num("  -7  ");'), ["-7"])
+
+    def test_num_of_number_is_identity(self):
+        self.assertEqual(run_output("print num(9);"), ["9"])
+
+    def test_num_invalid_raises(self):
+        with self.assertRaises(RuntimeError_):
+            run_output('print num("abc");')
+
+    def test_split_on_separator(self):
+        self.assertEqual(run_output('print split("a,b,c", ",");'),
+                         ['["a", "b", "c"]'])
+
+    def test_split_on_whitespace(self):
+        self.assertEqual(run_output('print split("hi  there world");'),
+                         ['["hi", "there", "world"]'])
+
+    def test_join(self):
+        self.assertEqual(run_output('print join(["a", "b", "c"], "-");'),
+                         ["a-b-c"])
+
+    def test_join_stringifies_elements(self):
+        self.assertEqual(run_output('print join([1, 2, 3], ", ");'), ["1, 2, 3"])
+
+    def test_split_join_round_trip(self):
+        src = 'print join(split("a-b-c", "-"), "+");'
+        self.assertEqual(run_output(src), ["a+b+c"])
+
+    def test_input_reads_a_line(self):
+        src = 'let n = input(); print "hi " + n;'
+        self.assertEqual(run_io(src, "world\n"), ["hi world"])
+
+    def test_input_then_num(self):
+        src = 'let n = num(input()); print n + 1;'
+        self.assertEqual(run_io(src, "41\n"), ["42"])
+
+    def test_input_eof_returns_nil(self):
+        src = 'let n = input(); print n;'
+        self.assertEqual(run_io(src, ""), ["nil"])
 
 
 class TestInterpreterErrors(unittest.TestCase):

@@ -10,24 +10,24 @@ I wanted to actually get how interpreters work instead of just reading about lex
 
 Run a file:
 
-​```sh
+```sh
 python3 main.py examples/fizzbuzz.sprout
-​```
+```
 
 Or just start the REPL with no arguments and mess around line by line:
 
-​```sh
+```sh
 python3 main.py
 >>> let x = 21;
 >>> x * 2
 42
-​```
+```
 
 No install, no packages, you just need Python 3. The `.sprout` extension is just a convention, any text file works.
 
 ## The language in 60 seconds
 
-​```
+```
 // variables and basic types
 let name = "Sprout";
 let count = 3;
@@ -74,7 +74,7 @@ print user["name"];
 user["age"] = 37;
 print keys(user);     // ["name", "age"]
 print has(user, "name");
-​```
+```
 
 ### Built-in functions
 
@@ -83,4 +83,3 @@ print has(user, "name");
 | `len(x)` | length of an array, string, or map |
 | `push(arr, v)` / `pop(arr)` | add to / remove last from an array |
 | `keys(map)` / `has(map, k)` | a map's keys / whether a key exists |
-|

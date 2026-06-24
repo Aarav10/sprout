@@ -37,10 +37,11 @@ literals are only recognized in expression position (see primary).
 from typing import List, Optional
 
 import ast_nodes as ast
+from errors import SproutError
 from lexer import Token, TokenType
 
 
-class ParseError(Exception):
+class ParseError(SproutError):
     """Raised when the token stream doesn't match the grammar."""
 
 
@@ -59,6 +60,14 @@ class Parser:
     # --- statement rules --------------------------------------------------
 
     def _statement(self) -> ast.Stmt:
+        """Parse one statement, stamping it with its starting source line so
+        the interpreter can report which line a runtime error occurred on."""
+        line = self._peek().line
+        stmt = self._statement_inner()
+        stmt.line = line
+        return stmt
+
+    def _statement_inner(self) -> ast.Stmt:
         """Dispatch on the leading token to the right statement rule."""
         if self._match(TokenType.LET):
             return self._let_declaration()
@@ -218,7 +227,7 @@ class Parser:
                 return ast.Assign(expr.name, value)
             if isinstance(expr, ast.Index):
                 return ast.IndexAssign(expr.target, expr.index, value)
-            raise ParseError(f"invalid assignment target on line {equals.line}")
+            raise ParseError("invalid assignment target", equals.line, equals.column)
         return expr
 
     def _logic_or(self) -> ast.Expr:
@@ -354,7 +363,8 @@ class Parser:
             self._consume(TokenType.RPAREN, "expected ')' after expression")
             return expr
         tok = self._peek()
-        raise ParseError(f"expected expression but found {tok.lexeme!r} on line {tok.line}")
+        what = "end of input" if tok.type == TokenType.EOF else repr(tok.lexeme)
+        raise ParseError(f"expected an expression but found {what}", tok.line, tok.column)
 
     # --- token cursor helpers ---------------------------------------------
 
@@ -383,7 +393,8 @@ class Parser:
         if self._check(type):
             return self._advance()
         tok = self._peek()
-        raise ParseError(f"{message} (line {tok.line}, found {tok.lexeme!r})")
+        what = "end of input" if tok.type == TokenType.EOF else repr(tok.lexeme)
+        raise ParseError(f"{message} (found {what})", tok.line, tok.column)
 
     def _peek(self) -> Token:
         return self.tokens[self.current]

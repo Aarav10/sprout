@@ -9,9 +9,10 @@ Sprout's runtime values).
 from typing import Any, Dict, List, Optional
 
 import ast_nodes as ast
+from errors import SproutError
 
 
-class RuntimeError_(Exception):
+class RuntimeError_(SproutError):
     """A Sprout runtime error (named with a trailing underscore so it doesn't
     shadow Python's built-in RuntimeError)."""
 
@@ -108,6 +109,7 @@ class Interpreter:
     def __init__(self):
         self.globals = Environment()
         self.environment = self.globals
+        self.current_line = None  # line of the statement currently executing
         self._install_builtins()
 
     def _install_builtins(self) -> None:
@@ -241,6 +243,22 @@ class Interpreter:
     # --- statement execution ---------------------------------------------
 
     def execute(self, stmt: ast.Stmt) -> None:
+        """Execute a statement, tagging any runtime error with its line.
+
+        Because nested statements execute innermost-first, the most specific
+        statement stamps the error; outer frames see a line already set and
+        leave it untouched."""
+        line = getattr(stmt, "line", None)
+        if line is not None:
+            self.current_line = line
+        try:
+            self._execute(stmt)
+        except RuntimeError_ as err:
+            if err.line is None:
+                err.line = getattr(stmt, "line", self.current_line)
+            raise
+
+    def _execute(self, stmt: ast.Stmt) -> None:
         """Dispatch a single statement to its handler."""
         if isinstance(stmt, ast.ExpressionStmt):
             self.evaluate(stmt.expr)

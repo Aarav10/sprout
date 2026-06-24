@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, List
 
+from errors import SproutError
+
 
 class TokenType(Enum):
     # Literals
@@ -94,9 +96,10 @@ class Token:
     lexeme: str          # the exact source text
     literal: Any         # parsed value for NUMBER/STRING, else None
     line: int            # 1-based line number, for error messages
+    column: int = 1      # 1-based column of the token's first character
 
 
-class LexError(Exception):
+class LexError(SproutError):
     """Raised on an unexpected character or unterminated string."""
 
 
@@ -104,16 +107,17 @@ class Lexer:
     def __init__(self, source: str):
         self.source = source
         self.tokens: List[Token] = []
-        self.start = 0      # start of the token currently being scanned
-        self.current = 0    # current scan position
+        self.start = 0       # start of the token currently being scanned
+        self.current = 0     # current scan position
         self.line = 1
+        self.line_start = 0  # source index where the current line begins
 
     def tokenize(self) -> List[Token]:
         """Scan the whole source and return the token list (ending in EOF)."""
         while not self._is_at_end():
             self.start = self.current
             self._scan_token()
-        self.tokens.append(Token(TokenType.EOF, "", None, self.line))
+        self.tokens.append(Token(TokenType.EOF, "", None, self.line, self._column(self.current)))
         return self.tokens
 
     # --- helpers ----------------------------------------------------------
@@ -127,6 +131,7 @@ class Lexer:
             return
         if c == "\n":
             self.line += 1
+            self.line_start = self.current  # next char starts the new line
             return
 
         # Single-character tokens.
@@ -184,7 +189,7 @@ class Lexer:
             self._identifier()
             return
 
-        raise LexError(f"Unexpected character {c!r} on line {self.line}")
+        raise LexError(f"unexpected character {c!r}", self.line, self._column(self.start))
 
     def _number(self) -> None:
         """Scan a numeric literal (integer or float)."""
@@ -209,6 +214,8 @@ class Lexer:
         The token's literal value is the *decoded* string, so a `\\n` in the
         source becomes an actual newline character in the value.
         """
+        start_line = self.line
+        start_col = self._column(self.start)
         chars: List[str] = []
         while self._peek() != '"' and not self._is_at_end():
             c = self._advance()
@@ -220,16 +227,18 @@ class Lexer:
                 esc = self._advance()
                 if esc not in STRING_ESCAPES:
                     raise LexError(
-                        f"Unknown escape sequence '\\{esc}' on line {self.line}"
+                        f"unknown escape sequence '\\{esc}'",
+                        self.line, self._column(self.current - 2),
                     )
                 chars.append(STRING_ESCAPES[esc])
             else:
                 if c == "\n":
                     self.line += 1
+                    self.line_start = self.current
                 chars.append(c)
 
         if self._is_at_end():
-            raise LexError(f"Unterminated string starting on line {self.line}")
+            raise LexError("unterminated string", start_line, start_col)
 
         self._advance()  # consume the closing quote
         self._add_token(TokenType.STRING, "".join(chars))
@@ -273,6 +282,10 @@ class Lexer:
             return ""
         return self.source[self.current + 1]
 
+    def _column(self, index: int) -> int:
+        """1-based column of `index` within its source line."""
+        return index - self.line_start + 1
+
     def _add_token(self, type: TokenType, literal: Any = None) -> None:
         lexeme = self.source[self.start:self.current]
-        self.tokens.append(Token(type, lexeme, literal, self.line))
+        self.tokens.append(Token(type, lexeme, literal, self.line, self._column(self.start)))

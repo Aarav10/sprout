@@ -19,6 +19,7 @@ from contextlib import redirect_stdout
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ast_nodes as ast
+from errors import SproutError
 from lexer import Lexer, LexError, TokenType
 from parser import Parser, ParseError
 from interpreter import Interpreter, RuntimeError_
@@ -527,6 +528,47 @@ class TestInterpreterErrors(unittest.TestCase):
     def test_bool_is_not_a_number(self):
         with self.assertRaises(RuntimeError_):
             run_output("print true * 2;")
+
+
+class TestErrorMessages(unittest.TestCase):
+    def test_format_points_caret_at_column(self):
+        out = SproutError("bad", line=1, column=5).format("abcdefg", "Syntax error")
+        src_line, caret_line = out.splitlines()[-2:]
+        # The caret should sit directly under the 5th source character.
+        self.assertIn("^", caret_line)
+        self.assertEqual(caret_line.index("^"), src_line.index("abcdefg") + 4)
+
+    def test_format_includes_line_number_and_message(self):
+        out = SproutError("boom", line=3, column=2).format("a\nb\nccc", "Runtime error")
+        self.assertIn("Runtime error: boom", out)
+        self.assertIn("(line 3)", out)
+
+    def test_format_without_line_is_plain(self):
+        self.assertEqual(SproutError("oops").format("x", "Runtime error"),
+                         "Runtime error: oops")
+
+    def test_lex_error_carries_position(self):
+        with self.assertRaises(LexError) as ctx:
+            lex("let x = @;")
+        self.assertEqual(ctx.exception.line, 1)
+        self.assertEqual(ctx.exception.column, 9)  # '@' is the 9th column
+
+    def test_parse_error_carries_position(self):
+        with self.assertRaises(ParseError) as ctx:
+            parse("let x = 5")  # missing ';'
+        self.assertEqual(ctx.exception.line, 1)
+        self.assertIsNotNone(ctx.exception.column)
+
+    def test_runtime_error_carries_line(self):
+        with self.assertRaises(RuntimeError_) as ctx:
+            Interpreter().interpret(parse("print 1;\nprint 1 / 0;"))
+        self.assertEqual(ctx.exception.line, 2)
+
+    def test_runtime_error_line_inside_function(self):
+        src = "fn f(n) {\n  return n / 0;\n}\nprint f(5);"
+        with self.assertRaises(RuntimeError_) as ctx:
+            Interpreter().interpret(parse(src))
+        self.assertEqual(ctx.exception.line, 2)  # the division, not the call
 
 
 if __name__ == "__main__":

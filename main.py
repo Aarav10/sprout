@@ -22,10 +22,10 @@ def run(source: str) -> int:
         statements = Parser(tokens).parse()
         Interpreter().interpret(statements)
     except (LexError, ParseError) as err:
-        print(f"Syntax error: {err}", file=sys.stderr)
+        print(err.format(source, "Syntax error"), file=sys.stderr)
         return 65
     except RuntimeError_ as err:
-        print(f"Runtime error: {err}", file=sys.stderr)
+        print(err.format(source, "Runtime error"), file=sys.stderr)
         return 70
     return 0
 
@@ -80,9 +80,9 @@ def _eval_repl_line(interpreter: Interpreter, source: str) -> None:
         else:
             interpreter.interpret(statements)
     except (LexError, ParseError) as err:
-        print(f"Syntax error: {err}", file=sys.stderr)
+        print(err.format(source, "Syntax error"), file=sys.stderr)
     except RuntimeError_ as err:
-        print(f"Runtime error: {err}", file=sys.stderr)
+        print(err.format(source, "Runtime error"), file=sys.stderr)
 
 
 def main(argv: list) -> int:

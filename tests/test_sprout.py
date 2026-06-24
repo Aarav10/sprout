@@ -241,6 +241,42 @@ class TestInterpreterFunctions(unittest.TestCase):
         self.assertEqual(run_output(src), ["inner", "outer"])
 
 
+class TestInterpreterForLoops(unittest.TestCase):
+    def test_basic_counting(self):
+        self.assertEqual(
+            run_output("for (let i = 0; i < 4; i = i + 1) { print i; }"),
+            ["0", "1", "2", "3"],
+        )
+
+    def test_iterate_array_by_index(self):
+        src = ("let a = [10, 20, 30];"
+               "for (let i = 0; i < len(a); i = i + 1) { print a[i]; }")
+        self.assertEqual(run_output(src), ["10", "20", "30"])
+
+    def test_loop_variable_does_not_leak(self):
+        src = ("let i = 99; for (let i = 0; i < 2; i = i + 1) { } print i;")
+        self.assertEqual(run_output(src), ["99"])
+
+    def test_external_initializer(self):
+        # No `let`: the for-loop reuses an existing variable.
+        src = ("let i = 0; for (; i < 3; i = i + 1) { print i; } print i;")
+        self.assertEqual(run_output(src), ["0", "1", "2", "3"])
+
+    def test_omitted_increment(self):
+        src = ("for (let i = 0; i < 3;) { print i; i = i + 1; }")
+        self.assertEqual(run_output(src), ["0", "1", "2"])
+
+    def test_return_breaks_out_of_loop(self):
+        src = ("fn f() { for (let i = 0; i < 10; i = i + 1) { if (i == 2) { return i; } } return -1; }"
+               "print f();")
+        self.assertEqual(run_output(src), ["2"])
+
+    def test_nested_for_loops(self):
+        src = ("for (let i = 1; i <= 2; i = i + 1) {"
+               "  for (let j = 1; j <= 2; j = j + 1) { print i * j; } }")
+        self.assertEqual(run_output(src), ["1", "2", "2", "4"])
+
+
 class TestInterpreterArrays(unittest.TestCase):
     def test_literal_and_print(self):
         self.assertEqual(run_output("print [1, 2, 3];"), ["[1, 2, 3]"])

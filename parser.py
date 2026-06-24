@@ -7,8 +7,10 @@ precedence rules call higher-precedence ones.
 Grammar (informal, lowest to highest precedence):
 
     program     -> statement* EOF
-    statement   -> letDecl | fnDecl | ifStmt | whileStmt
+    statement   -> letDecl | fnDecl | ifStmt | whileStmt | forStmt
                  | returnStmt | printStmt | block | exprStmt
+    forStmt     -> "for" "(" ( letDecl | exprStmt | ";" )
+                   expression? ";" expression? ")" statement
     block       -> "{" statement* "}"
     exprStmt    -> expression ";"
 
@@ -61,6 +63,8 @@ class Parser:
             return self._if_statement()
         if self._match(TokenType.WHILE):
             return self._while_statement()
+        if self._match(TokenType.FOR):
+            return self._for_statement()
         if self._match(TokenType.RETURN):
             return self._return_statement()
         if self._match(TokenType.PRINT):
@@ -112,6 +116,59 @@ class Parser:
         self._consume(TokenType.RPAREN, "expected ')' after while condition")
         body = self._statement()
         return ast.WhileStmt(condition, body)
+
+    def _for_statement(self) -> ast.Stmt:
+        # `for` already consumed. C-style: for (init; cond; incr) body.
+        # Rather than add a new node + interpreter case, we desugar into the
+        # existing Block/While/Expression nodes:
+        #
+        #     for (init; cond; incr) body
+        #
+        #   becomes
+        #
+        #     { init; while (cond) { body; incr; } }
+        #
+        # Each of the three clauses is optional.
+        self._consume(TokenType.LPAREN, "expected '(' after 'for'")
+
+        # Initializer clause.
+        initializer: Optional[ast.Stmt]
+        if self._match(TokenType.SEMICOLON):
+            initializer = None
+        elif self._match(TokenType.LET):
+            initializer = self._let_declaration()   # consumes its own ';'
+        else:
+            initializer = self._expression_statement()  # consumes its own ';'
+
+        # Condition clause (defaults to true for an infinite loop).
+        condition: ast.Expr
+        if not self._check(TokenType.SEMICOLON):
+            condition = self._expression()
+        else:
+            condition = ast.Literal(True)
+        self._consume(TokenType.SEMICOLON, "expected ';' after for-loop condition")
+
+        # Increment clause.
+        increment: Optional[ast.Expr]
+        if not self._check(TokenType.RPAREN):
+            increment = self._expression()
+        else:
+            increment = None
+        self._consume(TokenType.RPAREN, "expected ')' after for clauses")
+
+        body = self._statement()
+
+        # Append the increment to the end of each iteration.
+        if increment is not None:
+            body = ast.Block([body, ast.ExpressionStmt(increment)])
+
+        loop: ast.Stmt = ast.WhileStmt(condition, body)
+
+        # Run the initializer once, in a scope enclosing the loop.
+        if initializer is not None:
+            loop = ast.Block([initializer, loop])
+
+        return loop
 
     def _return_statement(self) -> ast.Stmt:
         # `return` already consumed.

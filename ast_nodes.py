@@ -83,6 +83,14 @@ class ArrayLiteral(Expr):
 
 
 @dataclass
+class Interpolation(Expr):
+    """A string with embedded `{expr}` parts, e.g. "hi {name}". `parts` is a
+    list of expressions (literal chunks are Literal strings); the value is
+    their string concatenation."""
+    parts: List[Expr]
+
+
+@dataclass
 class MapLiteral(Expr):
     """A hash-map literal, e.g. `{"a": 1, "b": 2}`. `pairs` is a list of
     (key_expr, value_expr) tuples, evaluated in order."""

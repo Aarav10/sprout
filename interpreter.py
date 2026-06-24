@@ -315,6 +315,8 @@ class Interpreter:
             return self._eval_logical(expr)
         if isinstance(expr, ast.Call):
             return self._eval_call(expr)
+        if isinstance(expr, ast.Interpolation):
+            return "".join(self._stringify(self.evaluate(p)) for p in expr.parts)
         if isinstance(expr, ast.ArrayLiteral):
             return [self.evaluate(element) for element in expr.elements]
         if isinstance(expr, ast.MapLiteral):

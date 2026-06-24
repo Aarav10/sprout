@@ -38,7 +38,7 @@ from typing import List, Optional
 
 import ast_nodes as ast
 from errors import SproutError
-from lexer import Token, TokenType
+from lexer import Lexer, Token, TokenType
 
 
 class ParseError(SproutError):
@@ -311,6 +311,35 @@ class Parser:
         self._consume(TokenType.RPAREN, "expected ')' after arguments")
         return ast.Call(callee, args)
 
+    def _interpolation(self, token: Token) -> ast.Expr:
+        """Turn an ISTRING token's parts into an Interpolation node. Each
+        embedded expression's source is re-lexed and parsed on its own."""
+        parts: List[ast.Expr] = []
+        for kind, value in token.literal:
+            if kind == "lit":
+                if value:  # drop empty literal chunks between/around exprs
+                    parts.append(ast.Literal(value))
+            else:  # "expr": parse the raw fragment as a standalone expression
+                fragment = value.strip()
+                try:
+                    sub = Parser(Lexer(value).tokenize())
+                    expr = sub._expression()
+                    leftover = not sub._is_at_end()
+                except SproutError as err:
+                    # The fragment lexes/parses as its own line-1 source, so
+                    # re-anchor any error onto the interpolation's real site.
+                    raise ParseError(
+                        f"in interpolation '{{{fragment}}}': {err.message}",
+                        token.line, token.column,
+                    )
+                if leftover:
+                    raise ParseError(
+                        f"unexpected tokens in interpolation '{{{fragment}}}'",
+                        token.line, token.column,
+                    )
+                parts.append(expr)
+        return ast.Interpolation(parts)
+
     def _array_literal(self) -> ast.Expr:
         # Opening '[' already consumed.
         elements: List[ast.Expr] = []
@@ -352,6 +381,8 @@ class Parser:
             return ast.Literal(None)
         if self._match(TokenType.NUMBER, TokenType.STRING):
             return ast.Literal(self._previous().literal)
+        if self._match(TokenType.ISTRING):
+            return self._interpolation(self._previous())
         if self._match(TokenType.IDENT):
             return ast.Identifier(self._previous().lexeme)
         if self._match(TokenType.LBRACKET):

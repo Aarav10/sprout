@@ -530,6 +530,54 @@ class TestInterpreterErrors(unittest.TestCase):
             run_output("print true * 2;")
 
 
+class TestStringInterpolation(unittest.TestCase):
+    def test_simple_variable(self):
+        self.assertEqual(run_output('let n = "Sprout"; print "hi {n}";'),
+                         ["hi Sprout"])
+
+    def test_multiple_and_arithmetic(self):
+        src = 'let a = 3; print "{a} + {a} = {a + a}";'
+        self.assertEqual(run_output(src), ["3 + 3 = 6"])
+
+    def test_number_is_stringified(self):
+        self.assertEqual(run_output('let x = 42; print "x={x}";'), ["x=42"])
+
+    def test_calls_and_indexing(self):
+        src = ('fn sq(n) { return n * n; } let a = [10, 20];'
+               'print "sq={sq(4)} first={a[0]} len={len(a)}";')
+        self.assertEqual(run_output(src), ["sq=16 first=10 len=2"])
+
+    def test_nested_string_inside_interpolation(self):
+        src = 'let m = {"k": 7}; print "v={m["k"]}";'
+        self.assertEqual(run_output(src), ["v=7"])
+
+    def test_array_and_bool_values(self):
+        self.assertEqual(run_output('print "{[1, 2]} {1 < 2}";'),
+                         ["[1, 2] true"])
+
+    def test_escaped_braces_are_literal(self):
+        self.assertEqual(run_output(r'print "a \{b\} c";'), ["a {b} c"])
+
+    def test_plain_string_unaffected(self):
+        self.assertEqual(run_output('print "no braces here";'),
+                         ["no braces here"])
+
+    def test_leading_and_trailing_text(self):
+        self.assertEqual(run_output('let x = 5; print "<{x}>";'), ["<5>"])
+
+    def test_unterminated_interpolation_raises(self):
+        with self.assertRaises(LexError):
+            lex('"oops {name"')
+
+    def test_empty_interpolation_raises(self):
+        with self.assertRaises(LexError):
+            lex('"{}"')
+
+    def test_bad_expression_in_interpolation_raises(self):
+        with self.assertRaises(ParseError):
+            parse('print "{1 +}";')
+
+
 class TestErrorMessages(unittest.TestCase):
     def test_format_points_caret_at_column(self):
         out = SproutError("bad", line=1, column=5).format("abcdefg", "Syntax error")

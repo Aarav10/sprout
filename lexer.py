@@ -16,6 +16,7 @@ class TokenType(Enum):
     # Literals
     NUMBER = auto()
     STRING = auto()
+    ISTRING = auto()       # interpolated string: literal is a list of parts
     IDENT = auto()
 
     # Keywords
@@ -87,6 +88,8 @@ STRING_ESCAPES = {
     "0": "\0",
     "\\": "\\",
     '"': '"',
+    "{": "{",   # escape a literal brace so it isn't read as interpolation
+    "}": "}",
 }
 
 
@@ -211,12 +214,17 @@ class Lexer:
     def _string(self) -> None:
         """Scan a double-quoted string literal, translating escape sequences.
 
-        The token's literal value is the *decoded* string, so a `\\n` in the
-        source becomes an actual newline character in the value.
+        A `\\n` in the source becomes a real newline in the value. A `{expr}`
+        starts an interpolation: the string is emitted as an ISTRING token
+        whose literal is a list of ("lit", text) / ("expr", source) parts. A
+        plain string with no interpolation stays a STRING token.
         """
         start_line = self.line
         start_col = self._column(self.start)
-        chars: List[str] = []
+        parts = []           # accumulated ("lit"|"expr", value) parts
+        chars: List[str] = []  # current literal run
+        interpolated = False
+
         while self._peek() != '"' and not self._is_at_end():
             c = self._advance()
             if c == "\\":
@@ -231,6 +239,11 @@ class Lexer:
                         self.line, self._column(self.current - 2),
                     )
                 chars.append(STRING_ESCAPES[esc])
+            elif c == "{":
+                interpolated = True
+                parts.append(("lit", "".join(chars)))
+                chars = []
+                parts.append(("expr", self._scan_interpolation()))
             else:
                 if c == "\n":
                     self.line += 1
@@ -241,7 +254,54 @@ class Lexer:
             raise LexError("unterminated string", start_line, start_col)
 
         self._advance()  # consume the closing quote
-        self._add_token(TokenType.STRING, "".join(chars))
+
+        if not interpolated:
+            self._add_token(TokenType.STRING, "".join(chars))
+        else:
+            parts.append(("lit", "".join(chars)))
+            self._add_token(TokenType.ISTRING, parts)
+
+    def _scan_interpolation(self) -> str:
+        """Collect the raw source of a `{...}` expression (the '{' is already
+        consumed), up to the matching '}'. Tracks brace depth and skips nested
+        string literals so braces inside them don't end the interpolation."""
+        start = self.current
+        depth = 1
+        while not self._is_at_end():
+            c = self._peek()
+            if c == '"':
+                self._skip_nested_string()
+                continue
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    source = self.source[start:self.current]
+                    self._advance()  # consume the '}'
+                    if source.strip() == "":
+                        raise LexError("empty interpolation '{}'",
+                                       self.line, self._column(start))
+                    return source
+            elif c == "\n":
+                self.line += 1
+                self._advance()
+                self.line_start = self.current
+                continue
+            self._advance()
+        raise LexError("unterminated interpolation in string",
+                       self.line, self._column(start))
+
+    def _skip_nested_string(self) -> None:
+        """Advance past a double-quoted string nested inside an interpolation,
+        honoring backslash escapes. The text is left in place for re-lexing."""
+        self._advance()  # opening quote
+        while self._peek() != '"' and not self._is_at_end():
+            if self._peek() == "\\":
+                self._advance()  # skip the escaped char as a unit
+            self._advance()
+        if not self._is_at_end():
+            self._advance()  # closing quote
 
     def _identifier(self) -> None:
         """Scan an identifier, promoting it to a keyword token if it is one."""
